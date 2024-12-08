@@ -18,7 +18,7 @@ openssl = ["russh/openssl"]
 [dependencies]
 russh = "0.45.0"
 russh-keys = "0.45.0"
-russh-sftp = "2.0.1"
+russh-sftp = "2.0.6"
 thiserror = "1.0"
 async-trait = "0.1"
 tokio = { version = "1", features = ["fs"] }

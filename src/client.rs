@@ -5,11 +5,12 @@ use russh::{
     Channel,
 };
 use russh_sftp::{client::SftpSession, protocol::OpenFlags};
+use tokio::fs::File;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use std::{fmt::Debug, path::Path};
 use std::{io, path::PathBuf};
-use tokio::io::AsyncWriteExt;
+use tokio::io::{AsyncWriteExt, AsyncReadExt};
 
 use crate::ToSocketAddrsWithHostname;
 
@@ -449,6 +450,51 @@ impl Client {
             .map_err(crate::Error::IoError)?;
         file.flush().await.map_err(crate::Error::IoError)?;
         file.shutdown().await.map_err(crate::Error::IoError)?;
+
+        Ok(())
+    }
+
+    /// Downloads a remote file from the SSH server to the local file system.
+    pub async fn download_file(
+        &self,
+        remote_file_path: &str,
+        local_file_path: &str,
+    ) -> Result<(), crate::Error> {
+        // Start SFTP session
+        let channel = self.get_channel().await?;
+        channel.request_subsystem(true, "sftp").await?;
+        let mut sftp = SftpSession::new(channel.into_stream()).await?;
+
+        // Open remote file for reading
+        let mut remote_file = sftp
+            .open_with_flags(remote_file_path, OpenFlags::READ)
+            .await?;
+        println!("Remote file opened: {}", remote_file_path);
+
+        // Create local file for writing
+        let mut local_file = File::create(local_file_path).await?;
+        println!("Local file created: {}", local_file_path);
+
+        // Read chunks and write to local file
+        let mut buffer = vec![0u8; 8192];
+        loop {
+            let bytes_read = remote_file.read(&mut buffer).await?;
+            if bytes_read == 0 {
+                println!("End of file reached.");
+                break;
+            }
+
+            println!(
+                "Bytes read: {}, Data: {:?}",
+                bytes_read,
+                &buffer[..bytes_read]
+            );
+
+            local_file.write_all(&buffer[..bytes_read]).await?;
+        }
+
+        local_file.flush().await?;
+        println!("Download complete. Total bytes read");
 
         Ok(())
     }
